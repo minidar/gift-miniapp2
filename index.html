@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отправка NFT</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>📦 Отправка NFT</h1>
+            <p class="subtitle">Выберите подарок для отправки</p>
+        </div>
+
+        <div id="gift-list">
+            <!-- Подарки будут загружены из Telegram -->
+            <div class="loading">Загрузка подарков...</div>
+        </div>
+
+        <div class="actions">
+            <button id="sendBtn" class="btn-send" onclick="sendGift()">
+                📤 Отправить выбранный подарок
+            </button>
+            <button class="btn-cancel" onclick="closeApp()">❌ Закрыть</button>
+        </div>
+
+        <div id="status" class="status"></div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
