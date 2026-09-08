@@ -100,7 +100,7 @@ function renderGifts() {
 }
 
 // ============================================
-// ОТПРАВКА ПОДАРКА
+// ОТПРАВКА ВЫБРАННОГО ПОДАРКА
 // ============================================
 function sendGift() {
     if (!selectedGiftId) {
@@ -127,7 +127,7 @@ function sendGift() {
         
         setTimeout(() => {
             tg.close();
-        }, 2000);
+        }, 1500);
         
     } catch (error) {
         console.error('❌ Ошибка отправки:', error);
@@ -160,7 +160,7 @@ tg.onEvent('data', (data) => {
     try {
         const response = JSON.parse(data);
         
-        // ✅ ОБРАБОТКА ПОДАРКОВ
+        // Обработка списка подарков
         if (response.gifts) {
             gifts = response.gifts;
             renderGifts();
@@ -190,13 +190,6 @@ tg.onEvent('data', (data) => {
     } catch (e) {
         console.log('ℹ️ Не JSON ответ:', data);
     }
-});
-
-// ============================================
-// ОБРАБОТКА ЗАКРЫТИЯ
-// ============================================
-tg.onEvent('close', () => {
-    console.log('👋 Mini App закрыт');
 });
 
 // ============================================
