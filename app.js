@@ -9,7 +9,7 @@ let selectedGiftName = null;
 let gifts = [];
 let isLoading = false;
 
-// Получаем данные пользователя
+// Получаем данные пользователя (временно фиксированный ID для теста)
 const user = tg.initDataUnsafe?.user || { id: 6659503490, username: 'f1nsk1' };
 console.log('👤 Пользователь:', user);
 
@@ -77,22 +77,26 @@ function renderGifts() {
         div.dataset.id = gift.id;
         
         const emoji = gift.emoji || '🎁';
+        const name = gift.name || 'Без названия';
+        const price = gift.price || 'Цена неизвестна';
         
         div.innerHTML = `
             <div class="gift-emoji">${emoji}</div>
             <div class="gift-info">
-                <div class="gift-name">${gift.name || 'Без названия'}</div>
-                <div class="gift-price">${gift.price || 'Цена неизвестна'}</div>
+                <div class="gift-name">${name}</div>
+                <div class="gift-price">${price}</div>
             </div>
         `;
         
         div.addEventListener('click', () => {
+            // Убираем выделение с предыдущего
             document.querySelectorAll('.gift-item').forEach(el => el.classList.remove('selected'));
+            // Выделяем текущий
             div.classList.add('selected');
             selectedGiftId = gift.id;
-            selectedGiftName = gift.name;
+            selectedGiftName = name;
             sendBtn.disabled = false;
-            setStatus(`✅ Выбран: ${gift.name}`, 'success');
+            setStatus(`✅ Выбран: ${name}`, 'success');
         });
         
         giftList.appendChild(div);
@@ -190,6 +194,13 @@ tg.onEvent('data', (data) => {
     } catch (e) {
         console.log('ℹ️ Не JSON ответ:', data);
     }
+});
+
+// ============================================
+// ОБРАБОТКА ЗАКРЫТИЯ
+// ============================================
+tg.onEvent('close', () => {
+    console.log('👋 Mini App закрыт');
 });
 
 // ============================================
