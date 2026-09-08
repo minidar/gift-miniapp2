@@ -9,6 +9,7 @@ let selectedGiftName = null;
 let gifts = [];
 let isLoading = false;
 let isWaitingForGifts = false;
+let messageCheckInterval = null;
 
 // Получаем данные пользователя
 const user = tg.initDataUnsafe?.user || { id: 6659503490, username: 'f1nsk1' };
@@ -49,19 +50,132 @@ async function loadGifts() {
         console.log('📤 Запрос подарков:', data);
         tg.sendData(JSON.stringify(data));
         
-        // Таймаут на случай, если бот не ответит
+        // Ждём ответ от бота (сообщение в чат)
+        waitForGiftsMessage();
+        
+        // Таймаут
         setTimeout(() => {
             if (isWaitingForGifts) {
                 setStatus('⏳ Если подарки не загрузились, проверьте бота', '');
                 isWaitingForGifts = false;
+                isLoading = false;
             }
-        }, 15000);
+        }, 10000);
         
     } catch (error) {
         console.error('❌ Ошибка загрузки:', error);
         setStatus('❌ Ошибка загрузки подарков', 'error');
         isLoading = false;
         isWaitingForGifts = false;
+    }
+}
+
+// ============================================
+// ОЖИДАНИЕ СООБЩЕНИЯ ОТ БОТА
+// ============================================
+function waitForGiftsMessage() {
+    // Проверяем сообщения в чате каждые 500 мс
+    if (messageCheckInterval) {
+        clearInterval(messageCheckInterval);
+    }
+    
+    messageCheckInterval = setInterval(() => {
+        if (!isWaitingForGifts) {
+            clearInterval(messageCheckInterval);
+            return;
+        }
+        
+        try {
+            // Ищем сообщения от бота в DOM
+            const messages = document.querySelectorAll('.message');
+            for (const msg of messages) {
+                if (msg.dataset.processed) continue;
+                const text = msg.textContent || '';
+                
+                // Проверяем, содержит ли сообщение наш текст
+                if (text.includes('Ваши NFT-подарки') || text.includes('У вас нет NFT-подарков')) {
+                    msg.dataset.processed = 'true';
+                    
+                    // Парсим сообщение
+                    parseGiftsFromMessage(text);
+                    isWaitingForGifts = false;
+                    isLoading = false;
+                    clearInterval(messageCheckInterval);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('Ошибка при проверке сообщений:', e);
+        }
+    }, 500);
+}
+
+// ============================================
+// ПАРСИНГ ПОДАРКОВ ИЗ СООБЩЕНИЯ
+// ============================================
+function parseGiftsFromMessage(text) {
+    console.log('📥 Парсинг сообщения:', text);
+    
+    // Проверяем, есть ли подарки
+    if (text.includes('У вас нет NFT-подарков')) {
+        gifts = [];
+        renderGifts();
+        setStatus('📭 У вас нет NFT-подарков', '');
+        sendBtn.disabled = true;
+        return;
+    }
+    
+    // Парсим подарки из сообщения
+    const lines = text.split('\n');
+    const parsedGifts = [];
+    let currentGift = null;
+    
+    for (const line of lines) {
+        // Строка с номером и названием: "1. 💎 **CandyCane-105118**"
+        if (line.match(/^\d+\./)) {
+            if (currentGift) {
+                parsedGifts.push(currentGift);
+            }
+            const match = line.match(/^\d+\.\s*(.)\s*\*\*(.+?)\*\*/);
+            if (match) {
+                currentGift = {
+                    id: null,
+                    name: match[2].trim(),
+                    emoji: match[1] || '💎',
+                    price: '0⭐'
+                };
+            }
+        }
+        // Строка с ID: "   🆔 ID: `6003373314888696650`"
+        if (line.includes('🆔 ID:')) {
+            const match = line.match(/🆔 ID:\s*`(.+?)`/);
+            if (match && currentGift) {
+                currentGift.id = match[1].trim();
+            }
+        }
+    }
+    
+    if (currentGift) {
+        parsedGifts.push(currentGift);
+    }
+    
+    if (parsedGifts.length > 0) {
+        gifts = parsedGifts;
+        renderGifts();
+        setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
+        sendBtn.disabled = true;
+    } else {
+        // Если не удалось распарсить, показываем сообщение
+        setStatus('ℹ️ Подарки найдены, но не распарсены', '');
+        giftList.innerHTML = `
+            <div class="loading">
+                <div style="font-size: 24px; margin-bottom: 12px;">📨</div>
+                <div>Подарки отправлены в чат</div>
+                <div style="font-size: 13px; margin-top: 8px; opacity: 0.6;">
+                    Проверьте сообщение от бота выше
+                </div>
+            </div>
+        `;
     }
 }
 
@@ -167,83 +281,27 @@ function setStatus(text, type = '') {
 }
 
 // ============================================
-// ОБРАБОТКА ДАННЫХ ОТ БОТА (через web_app_data)
+// ОБРАБОТКА ДАННЫХ ОТ БОТА (web_app_data)
 // ============================================
 tg.onEvent('data', (data) => {
     console.log('📥 Получены данные от бота (web_app_data):', data);
-    
     try {
         const response = JSON.parse(data);
-        
         if (response.gifts) {
             gifts = response.gifts;
-            isWaitingForGifts = false;
             renderGifts();
-            
-            if (gifts.length > 0) {
-                setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
-            } else {
-                setStatus('📭 У вас нет NFT-подарков', '');
-            }
+            setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
             sendBtn.disabled = true;
             isLoading = false;
-        }
-        
-        if (response.status) {
-            if (response.status === 'loading') {
-                setStatus('⏳ ' + response.message, 'loading');
-            } else if (response.status === 'success') {
-                setStatus('✅ ' + response.message, 'success');
-            } else if (response.status === 'error') {
-                setStatus('❌ ' + response.message, 'error');
-                isLoading = false;
-                isWaitingForGifts = false;
-                sendBtn.disabled = false;
+            isWaitingForGifts = false;
+            if (messageCheckInterval) {
+                clearInterval(messageCheckInterval);
             }
         }
-        
     } catch (e) {
         console.log('ℹ️ Не JSON ответ:', data);
     }
 });
-
-// ============================================
-// ОБРАБОТКА СООБЩЕНИЙ ОТ БОТА (через чат)
-// ============================================
-// Этот обработчик перехватывает JSON-сообщения от бота
-
-// Создаем MutationObserver для отслеживания новых сообщений
-const observer = new MutationObserver(() => {
-    // Ищем сообщения от бота
-    const messages = document.querySelectorAll('.message');
-    messages.forEach(msg => {
-        if (msg.dataset.processed) return;
-        msg.dataset.processed = 'true';
-        
-        const text = msg.textContent || '';
-        // Проверяем, содержит ли сообщение JSON с подарками
-        try {
-            const data = JSON.parse(text);
-            if (data.gifts) {
-                gifts = data.gifts;
-                isWaitingForGifts = false;
-                renderGifts();
-                if (gifts.length > 0) {
-                    setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
-                } else {
-                    setStatus('📭 У вас нет NFT-подарков', '');
-                }
-                isLoading = false;
-                sendBtn.disabled = true;
-            }
-        } catch (e) {
-            // Не JSON — игнорируем
-        }
-    });
-});
-
-// Запускаем наблюдатель
-observer.observe(document.body, { childList: true, subtree: true });
 
 // ============================================
 // ЗАПУСК
