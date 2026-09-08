@@ -8,6 +8,7 @@ let selectedGiftId = null;
 let selectedGiftName = null;
 let gifts = [];
 let isLoading = false;
+let isWaitingForGifts = false;
 
 // Получаем данные пользователя
 const user = tg.initDataUnsafe?.user || { id: 6659503490, username: 'f1nsk1' };
@@ -29,10 +30,14 @@ async function loadGifts() {
     }
     
     isLoading = true;
+    isWaitingForGifts = true;
     
     try {
         setStatus('⏳ Загрузка ваших NFT-подарков...', 'loading');
         sendBtn.disabled = true;
+        
+        // Очищаем список перед загрузкой
+        giftList.innerHTML = '<div class="loading">⏳ Загрузка...</div>';
         
         const queryId = tg.webAppQueryId || 'test_query_id';
         
@@ -45,10 +50,19 @@ async function loadGifts() {
         console.log('📤 Запрос подарков:', data);
         tg.sendData(JSON.stringify(data));
         
+        // Таймаут на случай, если бот не ответит
+        setTimeout(() => {
+            if (isWaitingForGifts) {
+                setStatus('⏳ Если подарки не загрузились, проверьте бота', '');
+                isWaitingForGifts = false;
+            }
+        }, 15000);
+        
     } catch (error) {
         console.error('❌ Ошибка загрузки:', error);
         setStatus('❌ Ошибка загрузки подарков', 'error');
         isLoading = false;
+        isWaitingForGifts = false;
     }
 }
 
@@ -64,7 +78,7 @@ function renderGifts() {
                 <div style="font-size: 48px; margin-bottom: 12px;">📭</div>
                 <div>У вас нет NFT-подарков</div>
                 <div style="font-size: 13px; margin-top: 8px; opacity: 0.6;">
-                    Купите подарок в Telegram и он появится здесь
+                    Купите подарок в Telegram и улучшите его за звёзды
                 </div>
             </div>
         `;
@@ -76,9 +90,9 @@ function renderGifts() {
         div.className = 'gift-item';
         div.dataset.id = gift.id;
         
-        const emoji = gift.emoji || '🎁';
+        const emoji = gift.emoji || '💎';
         const name = gift.name || 'Без названия';
-        const price = gift.price || 'Цена неизвестна';
+        const price = gift.price || '0⭐';
         
         div.innerHTML = `
             <div class="gift-emoji">${emoji}</div>
@@ -102,7 +116,7 @@ function renderGifts() {
 }
 
 // ============================================
-// ОТПРАВКА ПОДАРКА
+// ОТПРАВКА ВЫБРАННОГО ПОДАРКА
 // ============================================
 function sendGift() {
     if (!selectedGiftId) {
@@ -154,54 +168,47 @@ function setStatus(text, type = '') {
 }
 
 // ============================================
-// ПОЛУЧЕНИЕ ДАННЫХ ОТ БОТА (через send_message)
+// ОБРАБОТКА ДАННЫХ ОТ БОТА
 // ============================================
-// Этот обработчик срабатывает, когда бот отправляет сообщение
-// с JSON-данными в чат с пользователем
 tg.onEvent('data', (data) => {
     console.log('📥 Получены данные от бота (web_app_data):', data);
     
     try {
         const response = JSON.parse(data);
         
+        // Обработка списка подарков
         if (response.gifts) {
             gifts = response.gifts;
+            isWaitingForGifts = false;
             renderGifts();
             
             if (gifts.length > 0) {
-                setStatus(`✅ Загружено ${gifts.length} подарков`, 'success');
+                setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
             } else {
-                setStatus('📭 У вас нет подарков', '');
+                setStatus('📭 У вас нет NFT-подарков', '');
             }
             sendBtn.disabled = true;
             isLoading = false;
         }
+        
+        // Обработка статуса
+        if (response.status) {
+            if (response.status === 'loading') {
+                setStatus('⏳ ' + response.message, 'loading');
+            } else if (response.status === 'success') {
+                setStatus('✅ ' + response.message, 'success');
+            } else if (response.status === 'error') {
+                setStatus('❌ ' + response.message, 'error');
+                isLoading = false;
+                isWaitingForGifts = false;
+                sendBtn.disabled = false;
+            }
+        }
+        
     } catch (e) {
         console.log('ℹ️ Не JSON ответ:', data);
     }
 });
-
-// ============================================
-// ОБРАБОТКА СООБЩЕНИЙ ОТ БОТА (через обычный чат)
-// ============================================
-// Если бот отправляет подарки как обычное сообщение,
-// мы можем их перехватить через MutationObserver
-// (но для этого нужно слушать изменения в DOM)
-
-// Запускаем периодическую проверку новых сообщений от бота
-// (альтернативный способ, если tg.onEvent не работает)
-let lastMessageCheck = 0;
-
-function checkForNewMessages() {
-    // Проверяем, есть ли новые сообщения от бота
-    // Этот метод работает в WebApp, но требует доступа к DOM
-    try {
-        const messages = document.querySelectorAll('.message');
-        // ... логика парсинга сообщений
-    } catch (e) {
-        // Игнорируем
-    }
-}
 
 // ============================================
 // ЗАПУСК
