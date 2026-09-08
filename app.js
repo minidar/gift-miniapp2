@@ -9,9 +9,21 @@ let selectedGiftName = null;
 let gifts = [];
 let isLoading = false;
 
-// Получаем данные пользователя
+// Получаем данные пользователя (с отладкой)
+console.log('🔍 initDataUnsafe:', tg.initDataUnsafe);
 const user = tg.initDataUnsafe?.user || { id: 0, username: 'guest' };
 console.log('👤 Пользователь:', user);
+
+// Если пользователь не авторизован — показываем ошибку
+if (user.id === 0) {
+    document.getElementById('gift-list').innerHTML = `
+        <div class="loading" style="color: #ff6b6b;">
+            ⚠️ Ошибка: не удалось получить данные пользователя.<br>
+            Пожалуйста, откройте Mini App через Telegram.
+        </div>
+    `;
+    document.getElementById('sendBtn').disabled = true;
+}
 
 // DOM элементы
 const giftList = document.getElementById('gift-list');
@@ -19,17 +31,21 @@ const sendBtn = document.getElementById('sendBtn');
 const statusDiv = document.getElementById('status');
 
 // ============================================
-// ЗАГРУЗКА РЕАЛЬНЫХ ПОДАРКОВ ПОЛЬЗОВАТЕЛЯ
+// ЗАГРУЗКА ПОДАРКОВ
 // ============================================
 async function loadGifts() {
     if (isLoading) return;
+    if (user.id === 0) {
+        setStatus('⚠️ Ошибка авторизации', 'error');
+        return;
+    }
+    
     isLoading = true;
     
     try {
         setStatus('⏳ Загрузка ваших NFT-подарков...', 'loading');
         sendBtn.disabled = true;
         
-        // Отправляем запрос боту на получение подарков
         const data = { 
             action: 'get_gifts',
             user_id: user.id 
@@ -37,9 +53,6 @@ async function loadGifts() {
         
         console.log('📤 Запрос подарков:', data);
         tg.sendData(JSON.stringify(data));
-        
-        // Ждём ответ от бота через событие 'data'
-        // Ответ будет обработан в tg.onEvent('data')
         
     } catch (error) {
         console.error('❌ Ошибка загрузки:', error);
@@ -72,7 +85,6 @@ function renderGifts() {
         div.className = 'gift-item';
         div.dataset.id = gift.id;
         
-        // Эмодзи с запасным вариантом
         const emoji = gift.emoji || '🎁';
         
         div.innerHTML = `
@@ -84,9 +96,7 @@ function renderGifts() {
         `;
         
         div.addEventListener('click', () => {
-            // Убираем выделение с предыдущего
             document.querySelectorAll('.gift-item').forEach(el => el.classList.remove('selected'));
-            // Выделяем текущий
             div.classList.add('selected');
             selectedGiftId = gift.id;
             selectedGiftName = gift.name;
@@ -99,7 +109,7 @@ function renderGifts() {
 }
 
 // ============================================
-// ОТПРАВКА ВЫБРАННОГО ПОДАРКА
+// ОТПРАВКА ПОДАРКА
 // ============================================
 function sendGift() {
     if (!selectedGiftId) {
@@ -159,7 +169,6 @@ tg.onEvent('data', (data) => {
     try {
         const response = JSON.parse(data);
         
-        // Обработка списка подарков
         if (response.gifts) {
             gifts = response.gifts;
             renderGifts();
@@ -173,7 +182,6 @@ tg.onEvent('data', (data) => {
             isLoading = false;
         }
         
-        // Обработка статуса
         if (response.status) {
             if (response.status === 'loading') {
                 setStatus('⏳ ' + response.message, 'loading');
@@ -187,13 +195,12 @@ tg.onEvent('data', (data) => {
         }
         
     } catch (e) {
-        // Если ответ не JSON, игнорируем
         console.log('ℹ️ Не JSON ответ:', data);
     }
 });
 
 // ============================================
-// ОБРАБОТКА ЗАКРЫТИЯ MINI APP
+// ОБРАБОТКА ЗАКРЫТИЯ
 // ============================================
 tg.onEvent('close', () => {
     console.log('👋 Mini App закрыт');
