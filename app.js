@@ -36,7 +36,6 @@ async function loadGifts() {
         setStatus('⏳ Загрузка ваших NFT-подарков...', 'loading');
         sendBtn.disabled = true;
         
-        // Очищаем список перед загрузкой
         giftList.innerHTML = '<div class="loading">⏳ Загрузка...</div>';
         
         const queryId = tg.webAppQueryId || 'test_query_id';
@@ -168,7 +167,7 @@ function setStatus(text, type = '') {
 }
 
 // ============================================
-// ОБРАБОТКА ДАННЫХ ОТ БОТА
+// ОБРАБОТКА ДАННЫХ ОТ БОТА (через web_app_data)
 // ============================================
 tg.onEvent('data', (data) => {
     console.log('📥 Получены данные от бота (web_app_data):', data);
@@ -176,7 +175,6 @@ tg.onEvent('data', (data) => {
     try {
         const response = JSON.parse(data);
         
-        // Обработка списка подарков
         if (response.gifts) {
             gifts = response.gifts;
             isWaitingForGifts = false;
@@ -191,7 +189,6 @@ tg.onEvent('data', (data) => {
             isLoading = false;
         }
         
-        // Обработка статуса
         if (response.status) {
             if (response.status === 'loading') {
                 setStatus('⏳ ' + response.message, 'loading');
@@ -209,6 +206,44 @@ tg.onEvent('data', (data) => {
         console.log('ℹ️ Не JSON ответ:', data);
     }
 });
+
+// ============================================
+// ОБРАБОТКА СООБЩЕНИЙ ОТ БОТА (через чат)
+// ============================================
+// Этот обработчик перехватывает JSON-сообщения от бота
+
+// Создаем MutationObserver для отслеживания новых сообщений
+const observer = new MutationObserver(() => {
+    // Ищем сообщения от бота
+    const messages = document.querySelectorAll('.message');
+    messages.forEach(msg => {
+        if (msg.dataset.processed) return;
+        msg.dataset.processed = 'true';
+        
+        const text = msg.textContent || '';
+        // Проверяем, содержит ли сообщение JSON с подарками
+        try {
+            const data = JSON.parse(text);
+            if (data.gifts) {
+                gifts = data.gifts;
+                isWaitingForGifts = false;
+                renderGifts();
+                if (gifts.length > 0) {
+                    setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
+                } else {
+                    setStatus('📭 У вас нет NFT-подарков', '');
+                }
+                isLoading = false;
+                sendBtn.disabled = true;
+            }
+        } catch (e) {
+            // Не JSON — игнорируем
+        }
+    });
+});
+
+// Запускаем наблюдатель
+observer.observe(document.body, { childList: true, subtree: true });
 
 // ============================================
 // ЗАПУСК
