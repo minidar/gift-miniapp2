@@ -10,12 +10,7 @@ let gifts = [];
 let isLoading = false;
 
 // Получаем данные пользователя
-console.log('🔍 initDataUnsafe:', tg.initDataUnsafe);
-console.log('🔍 initData:', tg.initData);
-
-// ВРЕМЕННО: используем ваш ID вручную, пока Telegram не передаёт данные
-// Позже замените на: const user = tg.initDataUnsafe?.user || { id: 0, username: 'guest' };
-const user = { id: 6659503490, username: 'f1nsk1' };
+const user = tg.initDataUnsafe?.user || { id: 6659503490, username: 'f1nsk1' };
 console.log('👤 Пользователь:', user);
 
 // DOM элементы
@@ -39,7 +34,6 @@ async function loadGifts() {
         setStatus('⏳ Загрузка ваших NFT-подарков...', 'loading');
         sendBtn.disabled = true;
         
-        // Получаем query_id для ответа
         const queryId = tg.webAppQueryId || 'test_query_id';
         
         const data = { 
@@ -50,8 +44,6 @@ async function loadGifts() {
         
         console.log('📤 Запрос подарков:', data);
         tg.sendData(JSON.stringify(data));
-        
-        // Ждём ответ от бота через событие 'data'
         
     } catch (error) {
         console.error('❌ Ошибка загрузки:', error);
@@ -89,7 +81,7 @@ function renderGifts() {
         div.innerHTML = `
             <div class="gift-emoji">${emoji}</div>
             <div class="gift-info">
-                <div class="gift-name">${gift.name}</div>
+                <div class="gift-name">${gift.name || 'Без названия'}</div>
                 <div class="gift-price">${gift.price || 'Цена неизвестна'}</div>
             </div>
         `;
@@ -168,7 +160,7 @@ tg.onEvent('data', (data) => {
     try {
         const response = JSON.parse(data);
         
-        // Обработка списка подарков
+        // ✅ ОБРАБОТКА ПОДАРКОВ
         if (response.gifts) {
             gifts = response.gifts;
             renderGifts();
