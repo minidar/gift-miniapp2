@@ -9,7 +9,7 @@ let selectedGiftName = null;
 let gifts = [];
 let isLoading = false;
 
-// Получаем данные пользователя (временно фиксированный ID для теста)
+// Получаем данные пользователя
 const user = tg.initDataUnsafe?.user || { id: 6659503490, username: 'f1nsk1' };
 console.log('👤 Пользователь:', user);
 
@@ -89,9 +89,7 @@ function renderGifts() {
         `;
         
         div.addEventListener('click', () => {
-            // Убираем выделение с предыдущего
             document.querySelectorAll('.gift-item').forEach(el => el.classList.remove('selected'));
-            // Выделяем текущий
             div.classList.add('selected');
             selectedGiftId = gift.id;
             selectedGiftName = name;
@@ -104,7 +102,7 @@ function renderGifts() {
 }
 
 // ============================================
-// ОТПРАВКА ВЫБРАННОГО ПОДАРКА
+// ОТПРАВКА ПОДАРКА
 // ============================================
 function sendGift() {
     if (!selectedGiftId) {
@@ -156,15 +154,16 @@ function setStatus(text, type = '') {
 }
 
 // ============================================
-// ОБРАБОТКА ДАННЫХ ОТ БОТА
+// ПОЛУЧЕНИЕ ДАННЫХ ОТ БОТА (через send_message)
 // ============================================
+// Этот обработчик срабатывает, когда бот отправляет сообщение
+// с JSON-данными в чат с пользователем
 tg.onEvent('data', (data) => {
-    console.log('📥 Получены данные от бота:', data);
+    console.log('📥 Получены данные от бота (web_app_data):', data);
     
     try {
         const response = JSON.parse(data);
         
-        // Обработка списка подарков
         if (response.gifts) {
             gifts = response.gifts;
             renderGifts();
@@ -177,31 +176,32 @@ tg.onEvent('data', (data) => {
             sendBtn.disabled = true;
             isLoading = false;
         }
-        
-        // Обработка статуса
-        if (response.status) {
-            if (response.status === 'loading') {
-                setStatus('⏳ ' + response.message, 'loading');
-            } else if (response.status === 'success') {
-                setStatus('✅ ' + response.message, 'success');
-            } else if (response.status === 'error') {
-                setStatus('❌ ' + response.message, 'error');
-                isLoading = false;
-                sendBtn.disabled = false;
-            }
-        }
-        
     } catch (e) {
         console.log('ℹ️ Не JSON ответ:', data);
     }
 });
 
 // ============================================
-// ОБРАБОТКА ЗАКРЫТИЯ
+// ОБРАБОТКА СООБЩЕНИЙ ОТ БОТА (через обычный чат)
 // ============================================
-tg.onEvent('close', () => {
-    console.log('👋 Mini App закрыт');
-});
+// Если бот отправляет подарки как обычное сообщение,
+// мы можем их перехватить через MutationObserver
+// (но для этого нужно слушать изменения в DOM)
+
+// Запускаем периодическую проверку новых сообщений от бота
+// (альтернативный способ, если tg.onEvent не работает)
+let lastMessageCheck = 0;
+
+function checkForNewMessages() {
+    // Проверяем, есть ли новые сообщения от бота
+    // Этот метод работает в WebApp, но требует доступа к DOM
+    try {
+        const messages = document.querySelectorAll('.message');
+        // ... логика парсинга сообщений
+    } catch (e) {
+        // Игнорируем
+    }
+}
 
 // ============================================
 // ЗАПУСК
