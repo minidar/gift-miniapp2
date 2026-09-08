@@ -9,21 +9,14 @@ let selectedGiftName = null;
 let gifts = [];
 let isLoading = false;
 
-// Получаем данные пользователя (с отладкой)
+// Получаем данные пользователя
 console.log('🔍 initDataUnsafe:', tg.initDataUnsafe);
-const user = tg.initDataUnsafe?.user || { id: 0, username: 'guest' };
-console.log('👤 Пользователь:', user);
+console.log('🔍 initData:', tg.initData);
 
-// Если пользователь не авторизован — показываем ошибку
-if (user.id === 0) {
-    document.getElementById('gift-list').innerHTML = `
-        <div class="loading" style="color: #ff6b6b;">
-            ⚠️ Ошибка: не удалось получить данные пользователя.<br>
-            Пожалуйста, откройте Mini App через Telegram.
-        </div>
-    `;
-    document.getElementById('sendBtn').disabled = true;
-}
+// ВРЕМЕННО: используем ваш ID вручную, пока Telegram не передаёт данные
+// Позже замените на: const user = tg.initDataUnsafe?.user || { id: 0, username: 'guest' };
+const user = { id: 6659503490, username: 'f1nsk1' };
+console.log('👤 Пользователь:', user);
 
 // DOM элементы
 const giftList = document.getElementById('gift-list');
@@ -46,13 +39,19 @@ async function loadGifts() {
         setStatus('⏳ Загрузка ваших NFT-подарков...', 'loading');
         sendBtn.disabled = true;
         
+        // Получаем query_id для ответа
+        const queryId = tg.webAppQueryId || 'test_query_id';
+        
         const data = { 
             action: 'get_gifts',
-            user_id: user.id 
+            user_id: user.id,
+            query_id: queryId
         };
         
         console.log('📤 Запрос подарков:', data);
         tg.sendData(JSON.stringify(data));
+        
+        // Ждём ответ от бота через событие 'data'
         
     } catch (error) {
         console.error('❌ Ошибка загрузки:', error);
@@ -169,6 +168,7 @@ tg.onEvent('data', (data) => {
     try {
         const response = JSON.parse(data);
         
+        // Обработка списка подарков
         if (response.gifts) {
             gifts = response.gifts;
             renderGifts();
@@ -182,6 +182,7 @@ tg.onEvent('data', (data) => {
             isLoading = false;
         }
         
+        // Обработка статуса
         if (response.status) {
             if (response.status === 'loading') {
                 setStatus('⏳ ' + response.message, 'loading');
