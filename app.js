@@ -9,7 +9,6 @@ let selectedGiftName = null;
 let gifts = [];
 let isLoading = false;
 let isWaitingForGifts = false;
-let messageCheckInterval = null;
 
 // Получаем данные пользователя
 const user = tg.initDataUnsafe?.user || { id: 6659503490, username: 'f1nsk1' };
@@ -19,6 +18,78 @@ console.log('👤 Пользователь:', user);
 const giftList = document.getElementById('gift-list');
 const sendBtn = document.getElementById('sendBtn');
 const statusDiv = document.getElementById('status');
+
+// ============================================
+// ПАРСИНГ ПОДАРКОВ ИЗ СООБЩЕНИЯ
+// ============================================
+function parseGiftsFromMessage(text) {
+    console.log('📥 Парсинг сообщения:', text);
+    
+    // Проверяем, есть ли подарки
+    if (text.includes('У вас нет NFT-подарков')) {
+        gifts = [];
+        renderGifts();
+        setStatus('📭 У вас нет NFT-подарков', '');
+        sendBtn.disabled = true;
+        isWaitingForGifts = false;
+        isLoading = false;
+        return;
+    }
+    
+    // Парсим подарки
+    const lines = text.split('\n');
+    const parsedGifts = [];
+    let currentGift = null;
+    
+    for (const line of lines) {
+        // Строка с номером и названием
+        if (line.match(/^\d+\./)) {
+            if (currentGift) {
+                parsedGifts.push(currentGift);
+            }
+            const match = line.match(/^\d+\.\s*(.)\s*\*\*(.+?)\*\*/);
+            if (match) {
+                currentGift = {
+                    id: null,
+                    name: match[2].trim(),
+                    emoji: match[1] || '💎',
+                    price: '0⭐'
+                };
+            }
+        }
+        // Строка с ID
+        if (line.includes('🆔 ID:')) {
+            const match = line.match(/🆔 ID:\s*`(.+?)`/);
+            if (match && currentGift) {
+                currentGift.id = match[1].trim();
+            }
+        }
+    }
+    
+    if (currentGift) {
+        parsedGifts.push(currentGift);
+    }
+    
+    if (parsedGifts.length > 0) {
+        gifts = parsedGifts;
+        renderGifts();
+        setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
+        sendBtn.disabled = true;
+    } else {
+        setStatus('ℹ️ Проверьте сообщение от бота', '');
+        giftList.innerHTML = `
+            <div class="loading">
+                <div style="font-size: 24px; margin-bottom: 12px;">📨</div>
+                <div>Подарки отправлены в чат</div>
+                <div style="font-size: 13px; margin-top: 8px; opacity: 0.6;">
+                    Проверьте сообщение от бота выше
+                </div>
+            </div>
+        `;
+    }
+    isWaitingForGifts = false;
+    isLoading = false;
+}
 
 // ============================================
 // ЗАГРУЗКА ПОДАРКОВ
@@ -39,19 +110,33 @@ async function loadGifts() {
         
         giftList.innerHTML = '<div class="loading">⏳ Загрузка...</div>';
         
-        const queryId = tg.webAppQueryId || 'test_query_id';
-        
         const data = { 
             action: 'get_gifts',
             user_id: user.id,
-            query_id: queryId
+            query_id: tg.webAppQueryId || 'test_query_id'
         };
         
         console.log('📤 Запрос подарков:', data);
         tg.sendData(JSON.stringify(data));
         
-        // Ждём ответ от бота (сообщение в чат)
-        waitForGiftsMessage();
+        // Слушаем сообщения от бота
+        tg.onEvent('data', (data) => {
+            console.log('📥 Получены данные от бота:', data);
+            try {
+                const response = JSON.parse(data);
+                if (response.gifts) {
+                    gifts = response.gifts;
+                    renderGifts();
+                    setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
+                    sendBtn.disabled = true;
+                    isLoading = false;
+                    isWaitingForGifts = false;
+                }
+            } catch (e) {
+                // Если не JSON, возможно это сообщение
+                parseGiftsFromMessage(data);
+            }
+        });
         
         // Таймаут
         setTimeout(() => {
@@ -67,115 +152,6 @@ async function loadGifts() {
         setStatus('❌ Ошибка загрузки подарков', 'error');
         isLoading = false;
         isWaitingForGifts = false;
-    }
-}
-
-// ============================================
-// ОЖИДАНИЕ СООБЩЕНИЯ ОТ БОТА
-// ============================================
-function waitForGiftsMessage() {
-    // Проверяем сообщения в чате каждые 500 мс
-    if (messageCheckInterval) {
-        clearInterval(messageCheckInterval);
-    }
-    
-    messageCheckInterval = setInterval(() => {
-        if (!isWaitingForGifts) {
-            clearInterval(messageCheckInterval);
-            return;
-        }
-        
-        try {
-            // Ищем сообщения от бота в DOM
-            const messages = document.querySelectorAll('.message');
-            for (const msg of messages) {
-                if (msg.dataset.processed) continue;
-                const text = msg.textContent || '';
-                
-                // Проверяем, содержит ли сообщение наш текст
-                if (text.includes('Ваши NFT-подарки') || text.includes('У вас нет NFT-подарков')) {
-                    msg.dataset.processed = 'true';
-                    
-                    // Парсим сообщение
-                    parseGiftsFromMessage(text);
-                    isWaitingForGifts = false;
-                    isLoading = false;
-                    clearInterval(messageCheckInterval);
-                    return;
-                }
-            }
-        } catch (e) {
-            console.log('Ошибка при проверке сообщений:', e);
-        }
-    }, 500);
-}
-
-// ============================================
-// ПАРСИНГ ПОДАРКОВ ИЗ СООБЩЕНИЯ
-// ============================================
-function parseGiftsFromMessage(text) {
-    console.log('📥 Парсинг сообщения:', text);
-    
-    // Проверяем, есть ли подарки
-    if (text.includes('У вас нет NFT-подарков')) {
-        gifts = [];
-        renderGifts();
-        setStatus('📭 У вас нет NFT-подарков', '');
-        sendBtn.disabled = true;
-        return;
-    }
-    
-    // Парсим подарки из сообщения
-    const lines = text.split('\n');
-    const parsedGifts = [];
-    let currentGift = null;
-    
-    for (const line of lines) {
-        // Строка с номером и названием: "1. 💎 **CandyCane-105118**"
-        if (line.match(/^\d+\./)) {
-            if (currentGift) {
-                parsedGifts.push(currentGift);
-            }
-            const match = line.match(/^\d+\.\s*(.)\s*\*\*(.+?)\*\*/);
-            if (match) {
-                currentGift = {
-                    id: null,
-                    name: match[2].trim(),
-                    emoji: match[1] || '💎',
-                    price: '0⭐'
-                };
-            }
-        }
-        // Строка с ID: "   🆔 ID: `6003373314888696650`"
-        if (line.includes('🆔 ID:')) {
-            const match = line.match(/🆔 ID:\s*`(.+?)`/);
-            if (match && currentGift) {
-                currentGift.id = match[1].trim();
-            }
-        }
-    }
-    
-    if (currentGift) {
-        parsedGifts.push(currentGift);
-    }
-    
-    if (parsedGifts.length > 0) {
-        gifts = parsedGifts;
-        renderGifts();
-        setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
-        sendBtn.disabled = true;
-    } else {
-        // Если не удалось распарсить, показываем сообщение
-        setStatus('ℹ️ Подарки найдены, но не распарсены', '');
-        giftList.innerHTML = `
-            <div class="loading">
-                <div style="font-size: 24px; margin-bottom: 12px;">📨</div>
-                <div>Подарки отправлены в чат</div>
-                <div style="font-size: 13px; margin-top: 8px; opacity: 0.6;">
-                    Проверьте сообщение от бота выше
-                </div>
-            </div>
-        `;
     }
 }
 
@@ -229,7 +205,7 @@ function renderGifts() {
 }
 
 // ============================================
-// ОТПРАВКА ВЫБРАННОГО ПОДАРКА
+// ОТПРАВКА ПОДАРКА
 // ============================================
 function sendGift() {
     if (!selectedGiftId) {
@@ -253,11 +229,7 @@ function sendGift() {
     try {
         tg.sendData(JSON.stringify(data));
         setStatus('✅ Подарок отправлен!', 'success');
-        
-        setTimeout(() => {
-            tg.close();
-        }, 1500);
-        
+        setTimeout(() => tg.close(), 1500);
     } catch (error) {
         console.error('❌ Ошибка отправки:', error);
         setStatus('❌ Ошибка отправки. Попробуйте снова.', 'error');
@@ -265,49 +237,16 @@ function sendGift() {
     }
 }
 
-// ============================================
-// ЗАКРЫТИЕ MINI APP
-// ============================================
-function closeApp() {
-    tg.close();
-}
-
-// ============================================
-// УСТАНОВКА СТАТУСА
-// ============================================
+function closeApp() { tg.close(); }
 function setStatus(text, type = '') {
     statusDiv.textContent = text;
     statusDiv.className = 'status ' + type;
 }
 
 // ============================================
-// ОБРАБОТКА ДАННЫХ ОТ БОТА (web_app_data)
-// ============================================
-tg.onEvent('data', (data) => {
-    console.log('📥 Получены данные от бота (web_app_data):', data);
-    try {
-        const response = JSON.parse(data);
-        if (response.gifts) {
-            gifts = response.gifts;
-            renderGifts();
-            setStatus(`✅ Загружено ${gifts.length} NFT-подарков`, 'success');
-            sendBtn.disabled = true;
-            isLoading = false;
-            isWaitingForGifts = false;
-            if (messageCheckInterval) {
-                clearInterval(messageCheckInterval);
-            }
-        }
-    } catch (e) {
-        console.log('ℹ️ Не JSON ответ:', data);
-    }
-});
-
-// ============================================
 // ЗАПУСК
 // ============================================
 loadGifts();
 
-// Экспорт функций для HTML
 window.sendGift = sendGift;
 window.closeApp = closeApp;
